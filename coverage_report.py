@@ -1,0 +1,289 @@
+#!/usr/bin/env python3
+"""Build a Markdown coverage report from the AIUC-1 to NIST AI RMF mapping CSV."""
+
+import csv
+import sys
+from pathlib import Path
+
+# Paths are anchored to this file so the script runs from any working directory.
+ROOT = Path(__file__).resolve().parent
+MAPPING_PATH = ROOT / "data" / "mapping.csv"
+REPORT_PATH = ROOT / "reports" / "coverage_report.md"
+
+REQUIRED_COLUMNS = [
+    "aiuc1_id",
+    "aiuc1_requirement_summary",
+    "ai_rmf_refs",
+    "coverage",
+    "iso42001_refs_via_nist_crosswalk",
+    "in_official_crosswalk",
+    "notes",
+]
+VALID_COVERAGE = ("full", "partial", "none")
+# Shown in the gap list: anything this mapping does not fully cover in the NIST AI RMF.
+GAP_LEVELS = ("partial", "none")
+
+
+def read_mapping(path):
+    """Load mapping rows. Returns (rows, error). error is a string when the file cannot be used."""
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle)
+        if not reader.fieldnames:
+            return None, f"error: {path.name} is empty"
+
+        fieldnames = [(name or "").strip() for name in reader.fieldnames]
+        missing = [column for column in REQUIRED_COLUMNS if column not in fieldnames]
+        if missing:
+            return None, "error: missing required columns: " + ", ".join(missing)
+
+        rows = []
+        for line_number, raw in enumerate(reader, start=2):
+            row = {
+                (key or "").strip(): (value or "").strip()
+                for key, value in raw.items()
+                if key
+            }
+            # Ignore blank lines so a trailing newline is not reported as a bad row.
+            if all(not row.get(column) for column in REQUIRED_COLUMNS):
+                continue
+            row["_line"] = line_number
+            rows.append(row)
+        return rows, None
+
+
+def split_refs(value):
+    """Split a semicolon- or comma-separated list of AI RMF references."""
+    refs = []
+    seen = set()
+    for chunk in (value or "").replace(";", ",").split(","):
+        ref = " ".join(chunk.split())
+        if not ref:
+            continue
+        key = ref.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        refs.append(ref)
+    return refs
+
+
+def check_rows(rows):
+    """Return valid rows, validation errors, and flags for covered rows with no AI RMF reference."""
+    valid = []
+    errors = []
+    flags = []
+    allowed = ", ".join(VALID_COVERAGE)
+
+    for row in rows:
+        line = row["_line"]
+        label = row["aiuc1_id"] or "(no id)"
+        coverage = row["coverage"]
+
+        if coverage not in VALID_COVERAGE:
+            errors.append(
+                f"error: line {line} ({label}): coverage {coverage!r} is invalid; "
+                f"expected one of: {allowed}"
+            )
+            continue
+
+        chosen = {ref.casefold() for ref in split_refs(row["ai_rmf_refs"])}
+        unknown = [
+            ref
+            for ref in split_refs(row["in_official_crosswalk"])
+            if ref.casefold() not in chosen
+        ]
+        # in_official_crosswalk can only name references this row already maps.
+        if unknown:
+            listed = ", ".join(repr(ref) for ref in unknown)
+            errors.append(
+                f"error: line {line} ({label}): in_official_crosswalk lists {listed}, "
+                "which is not in ai_rmf_refs"
+            )
+            continue
+
+        # full/partial claims need an AI RMF reference; none may leave that column blank.
+        if coverage in ("full", "partial") and not row["ai_rmf_refs"]:
+            flags.append(
+                f"warning: line {line} ({label}): coverage is {coverage!r} "
+                "but ai_rmf_refs is empty"
+            )
+        valid.append(row)
+
+    return valid, errors, flags
+
+
+def outside_official_crosswalk(rows):
+    """Chosen AI RMF references that AIUC-1's published crosswalk does not list."""
+    extras = []
+    for row in rows:
+        official = {ref.casefold() for ref in split_refs(row["in_official_crosswalk"])}
+        for ref in split_refs(row["ai_rmf_refs"]):
+            if ref.casefold() not in official:
+                extras.append((row, ref))
+    return extras
+
+
+def _cell(value):
+    """Keep one Markdown table cell on a single line."""
+    text = (value or "").replace("|", "\\|").replace("\n", " ").strip()
+    return text if text else "—"
+
+
+def _percent(count, total):
+    if total == 0:
+        return "0.0%"
+    return f"{(100.0 * count / total):.1f}%"
+
+
+def build_report(valid, errors, flags):
+    """Render the summary, the gap list, and mappings outside the official crosswalk."""
+    total = len(valid)
+    counts = {
+        level: sum(1 for row in valid if row["coverage"] == level)
+        for level in VALID_COVERAGE
+    }
+    extras = outside_official_crosswalk(valid)
+
+    lines = [
+        "# AIUC-1 coverage against the NIST AI RMF",
+        "",
+        "Generated by `coverage_report.py` from `data/mapping.csv`.",
+        "This mapping builds on AIUC-1's published NIST AI RMF crosswalk by adding coverage ratings, additional subcategory mappings, and ISO/IEC 42001 references.",
+        "ISO/IEC 42001 references come from NIST's published AI RMF to ISO/IEC 42001 crosswalk, which was built against the FDIS draft.",
+        "",
+        "## Summary",
+        "",
+        "| Coverage | Count | Percentage |",
+        "| --- | ---: | ---: |",
+    ]
+    for level in VALID_COVERAGE:
+        lines.append(f"| {level} | {counts[level]} | {_percent(counts[level], total)} |")
+    total_pct = "100%" if total else "0.0%"
+    lines.append(f"| **Total** | **{total}** | **{total_pct}** |")
+    lines.append("")
+
+    if errors or flags:
+        lines.extend(["## Data quality", ""])
+        if errors:
+            lines.append(
+                "These rows were excluded from the summary, the gap list, and the official-crosswalk comparison."
+            )
+            lines.append("")
+            lines.extend(f"- {message}" for message in errors)
+            lines.append("")
+        if flags:
+            lines.append(
+                "These rows claim coverage but do not cite a NIST AI RMF reference."
+            )
+            lines.append("")
+            lines.extend(f"- {message}" for message in flags)
+            lines.append("")
+
+    gaps = [row for row in valid if row["coverage"] in GAP_LEVELS]
+    lines.extend(
+        [
+            "## Gap list",
+            "",
+            "Every requirement mapped as `partial` or `none` against the NIST AI RMF.",
+            "",
+        ]
+    )
+    if not gaps:
+        lines.extend(["No gaps in the current mapping.", ""])
+    else:
+        lines.extend(
+            [
+                "| AIUC-1 ID | Requirement summary | Coverage | AI RMF refs | ISO/IEC 42001 refs via NIST crosswalk | In official crosswalk | Notes |",
+                "| --- | --- | --- | --- | --- | --- | --- |",
+            ]
+        )
+        for row in gaps:
+            lines.append(
+                "| {id} | {summary} | {coverage} | {rmf} | {iso} | {official} | {notes} |".format(
+                    id=_cell(row["aiuc1_id"]),
+                    summary=_cell(row["aiuc1_requirement_summary"]),
+                    coverage=_cell(row["coverage"]),
+                    rmf=_cell(row["ai_rmf_refs"]),
+                    iso=_cell(row["iso42001_refs_via_nist_crosswalk"]),
+                    official=_cell(row["in_official_crosswalk"]),
+                    notes=_cell(row["notes"]),
+                )
+            )
+        lines.append("")
+
+    lines.extend(
+        [
+            "## Not in the official crosswalk",
+            "",
+            "AI RMF subcategories in `ai_rmf_refs` that are not listed in `in_official_crosswalk`.",
+            "",
+        ]
+    )
+    if not extras:
+        lines.extend(
+            ["Every mapped AI RMF subcategory is listed in the official crosswalk.", ""]
+        )
+    else:
+        lines.extend(
+            [
+                "| AIUC-1 ID | Requirement summary | AI RMF subcategory | Coverage | Notes |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+        )
+        for row, ref in extras:
+            lines.append(
+                "| {id} | {summary} | {ref} | {coverage} | {notes} |".format(
+                    id=_cell(row["aiuc1_id"]),
+                    summary=_cell(row["aiuc1_requirement_summary"]),
+                    ref=_cell(ref),
+                    coverage=_cell(row["coverage"]),
+                    notes=_cell(row["notes"]),
+                )
+            )
+        lines.append("")
+
+    lines.extend(
+        [
+            "No ISO/IEC 42001 text is reproduced. ISO references are clause identifiers taken from NIST's crosswalk.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def main():
+    if not MAPPING_PATH.is_file():
+        print(f"error: mapping file not found: {MAPPING_PATH}", file=sys.stderr)
+        return 1
+
+    rows, error = read_mapping(MAPPING_PATH)
+    if error:
+        print(error, file=sys.stderr)
+        return 1
+
+    valid, errors, flags = check_rows(rows)
+    extras = outside_official_crosswalk(valid)
+    REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    REPORT_PATH.write_text(build_report(valid, errors, flags), encoding="utf-8")
+
+    for message in errors:
+        print(message, file=sys.stderr)
+    for message in flags:
+        print(message, file=sys.stderr)
+
+    print(f"Read {len(rows)} row(s) from data/mapping.csv")
+    for level in VALID_COVERAGE:
+        count = sum(1 for row in valid if row["coverage"] == level)
+        print(f"  {level:<7} {count:>3}  ({_percent(count, len(valid))})")
+    gap_count = sum(1 for row in valid if row["coverage"] in GAP_LEVELS)
+    print(f"Gaps (partial or none): {gap_count}")
+    print(f"Not in the official crosswalk: {len(extras)}")
+    for row, ref in extras:
+        label = row["aiuc1_id"] or "(no id)"
+        print(f"  line {row['_line']} ({label}): {ref}")
+    print("Wrote reports/coverage_report.md")
+    return 1 if errors else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
