@@ -17,7 +17,7 @@ Candidate AI RMF subcategories were identified with AI assistance using Cursor. 
 ## Key findings
 
 - AIUC-1's published crosswalk maps no AI RMF subcategory to A002 or A004.
-- This crosswalk adds 20 subcategories beyond the 7 official mappings.
+- This crosswalk adds 20 subcategory mappings beyond the 6 in AIUC-1's published crosswalk.
 - All 7 requirements rate as `partial`, because the AI RMF names these risks but, as a voluntary outcome-based framework, does not require the concrete technical controls AIUC-1 does.
 
 ## Mapping file
