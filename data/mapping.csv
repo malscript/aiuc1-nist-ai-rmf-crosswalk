@@ -1,4 +1,4 @@
-aiuc1_id,aiuc1_requirement_summary,ai_rmf_refs,coverage,iso42001_refs_via_nist_crosswalk,official_aiuc1_crosswalk_rating,notes
-EXAMPLE-001,Placeholder summary — replace with an original requirement summary,PLACEHOLDER,full,PLACEHOLDER,full,Placeholder note — replace
-EXAMPLE-002,Placeholder summary — replace with an original requirement summary,PLACEHOLDER,partial,PLACEHOLDER,full,Placeholder note — replace
-EXAMPLE-003,Placeholder summary — replace with an original requirement summary,,none,,none,Placeholder note — replace
+aiuc1_id,aiuc1_requirement_summary,ai_rmf_refs,coverage,iso42001_refs_via_nist_crosswalk,in_official_crosswalk,notes
+EXAMPLE-001,Placeholder summary — replace with an original requirement summary,PLACEHOLDER,full,PLACEHOLDER,PLACEHOLDER,Placeholder note — replace
+EXAMPLE-002,Placeholder summary — replace with an original requirement summary,PLACEHOLDER,partial,PLACEHOLDER,,Placeholder note — replace
+EXAMPLE-003,Placeholder summary — replace with an original requirement summary,,none,,,Placeholder note — replace
