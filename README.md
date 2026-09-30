@@ -8,7 +8,7 @@ ISO/IEC 42001 references in this project are not taken from the ISO standard. Th
 
 ## Scope
 
-The three rows in `data/mapping.csv` are placeholders. Replace the ids, summaries, references, ratings, and notes with your own. Do not copy ISO/IEC 42001 text into this repository.
+Version 0.1 maps Data & Privacy requirements A001 through A007. The summaries in `data/mapping.csv` are original wording. Do not copy ISO/IEC 42001 text into this repository.
 
 ## Mapping file
 
