@@ -10,6 +10,16 @@ ISO/IEC 42001 references in this project are not taken from the ISO standard. Th
 
 Version 0.1 maps Data & Privacy requirements A001 through A007. The summaries in `data/mapping.csv` are original wording. Do not copy ISO/IEC 42001 text into this repository.
 
+## Method
+
+Candidate AI RMF subcategories were identified with AI assistance using Cursor. Final subcategory selections, coverage ratings, and notes are by the author.
+
+## Key findings
+
+- AIUC-1's published crosswalk maps no AI RMF subcategory to A002 or A004.
+- This crosswalk adds 20 subcategories beyond the 7 official mappings.
+- All 7 requirements rate as `partial`, because the AI RMF names these risks but, as a voluntary outcome-based framework, does not require the concrete technical controls AIUC-1 does.
+
 ## Mapping file
 
 `data/mapping.csv` has these columns:
