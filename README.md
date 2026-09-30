@@ -30,7 +30,7 @@ The three rows in `data/mapping.csv` are placeholders. Replace the ids, summarie
 Requires Python 3 and the standard library only. From the repository root:
 
 ```bash
-python coverage_report.py
+python3 coverage_report.py
 ```
 
 The script reads `data/mapping.csv` and writes `reports/coverage_report.md`. It checks that the required columns are present and that every `coverage` value is `full`, `partial`, or `none`. Invalid rows are printed and left out of the totals. It also warns when `coverage` is `full` or `partial` but `iso42001_refs` is empty.
